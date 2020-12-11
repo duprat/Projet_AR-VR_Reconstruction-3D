@@ -3,11 +3,11 @@
 
 ## Bibliography
 
-(1) https://www.enseignement.polytechnique.fr/informatique/profs/Philippe.Chassignet/00-01/VISION/Loo/
-(2) https://igm.univ-mlv.fr/~vnozick/teaching/slides/m2_image/02_matrices_projection_vision.pdf
-(3) https://members.loria.fr/MOBerger/Enseignement/ENSG/stereovision.pdf
-(4) https://docs.opencv.org/master/dc/dbb/tutorial_py_calibration.html
-(5) https://docs.opencv.org/3.4/d4/d94/tutorial_camera_calibration.html
-(6) https://docs.opencv.org/master/d9/db7/tutorial_py_table_of_contents_calib3d.html
-(7) https://medium.com/@dc.aihub/3d-reconstruction-with-stereo-images-part-1-camera-calibration-d86f750a1ade
-(8) https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_calib3d/py_table_of_contents_calib3d/py_table_of_contents_calib3d.html
+(1) https://www.enseignement.polytechnique.fr/informatique/profs/Philippe.Chassignet/00-01/VISION/Loo/  
+(2) https://igm.univ-mlv.fr/~vnozick/teaching/slides/m2_image/02_matrices_projection_vision.pdf  
+(3) https://members.loria.fr/MOBerger/Enseignement/ENSG/stereovision.pdf  
+(4) https://docs.opencv.org/master/dc/dbb/tutorial_py_calibration.html  
+(5) https://docs.opencv.org/3.4/d4/d94/tutorial_camera_calibration.html  
+(6) https://docs.opencv.org/master/d9/db7/tutorial_py_table_of_contents_calib3d.html  
+(7) https://medium.com/@dc.aihub/3d-reconstruction-with-stereo-images-part-1-camera-calibration-d86f750a1ade  
+(8) https://docs.opencv.org/3.0-beta/doc/py_tutorials/py_calib3d/py_table_of_contents_calib3d/py_table_of_contents_calib3d.html  
