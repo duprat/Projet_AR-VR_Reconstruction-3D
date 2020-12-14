@@ -3,7 +3,7 @@ import cv2 as cv
 import numpy as np
 import imutils
 import matplotlib.pylab as plt
-
+import copy
 
 
 
@@ -59,19 +59,28 @@ def loadSequence(filename, _format,  start, end):
         
     return images
 
-
-
-def loadCameraParameters(folder, nb_vt_vectors):
     
-    matrix = np.genfromtxt(folder + 'camera_matrix.txt',dtype=float)
-    dist_coeffs = np.genfromtxt(folder + 'distortion_coeffs.txt',dtype=float)
+def buildDisparityMap(imgL,imgR):
+    imgL = cv.cvtColor(imgL,cv.COLOR_BGR2GRAY)
+    imgR = cv.cvtColor(imgR,cv.COLOR_BGR2GRAY)
+    stereo = cv.StereoBM_create(numDisparities=16, blockSize=15)
+    disparity = stereo.compute(imgL,imgR)
+    display(disparity,0,4,title='Disparity Map')
+    
+    
+
+ 
+def loadCameraParameters(user, nb_vt_vectors):
+    
+    matrix = np.genfromtxt(user + 'Text/camera_matrix.txt',dtype=float)
+    dist_coeffs = np.genfromtxt(user + 'Text/distortion_coeffs.txt',dtype=float)
     
     rotation_vectors = [[] for f in range(nb_vt_vectors)]
     translation_vectors = [[] for f in range(nb_vt_vectors)]
     
     for i in range(nb_vt_vectors):
-        rvec = np.genfromtxt(folder + 'rotation_vector_' + str(i) + '.txt',dtype=float)
-        tvec = np.genfromtxt(folder + 'translation_vector_' + str(i) + '.txt',dtype=float)
+        rvec = np.genfromtxt(user + 'Text/rotation_vector_' + str(i) + '.txt',dtype=float)
+        tvec = np.genfromtxt(user + 'Text/translation_vector_' + str(i) + '.txt',dtype=float)
         
         for r in rvec:
             rotation_vectors[i].append([r])
@@ -114,8 +123,7 @@ def computeReProjectionError(mtx, dist, rvecs, tvecs, objpoints,imgpoints):
         mean_error += error
     
     print ("total error: ", mean_error/len(objpoints))
-    
-
+   
 
 
 def getFramesWithCorners(user,CHESSBOARD):
@@ -140,22 +148,28 @@ def getFramesWithCorners(user,CHESSBOARD):
 
 
 def undistort(image, mtx,dist):
-    h,w = image.shape[:2]
-    newcameramtx, roi= cv.getOptimalNewCameraMatrix(mtx,dist,(w,h),1,(w,h))
-    
+    h,  w = image.shape[:2]
+    newcameramtx, roi = cv.getOptimalNewCameraMatrix(mtx, dist, (w,h), 1, (w,h))
     # undistort
-    mapx,mapy = cv.initUndistortRectifyMap(mtx,dist,None,newcameramtx,(w,h),5)
-    dst = cv.remap(image,mapx,mapy,cv.INTER_LINEAR)
+    
+    #option 1
+    dst = cv.undistort(image, mtx, dist, None, newcameramtx)
+    
+    
+    #option 2
+    #mapx, mapy = cv.initUndistortRectifyMap(mtx, dist, None, newcameramtx, (w,h), 5)
+    #dst = cv.remap(image, mapx, mapy, cv.INTER_LINEAR)
+    
     
     # crop the image
-    x,y,w,h = roi
-    dst = dst[y:y+h, x:x+w]
+    #x, y, w, h = roi
+    #dst = dst[y:y+h, x:x+w]
     return dst
  
     
  
       
-def computeCameraParameters(images):
+def computeCameraParameters(user, images):
     objpoints = [] # 3d point in real world space
     imgpoints = [] # 2d points in image plane.
     
@@ -180,7 +194,9 @@ def computeCameraParameters(images):
         image = undistort(image, mtx, dist)
     
     computeReProjectionError(mtx, dist, rvecs, tvecs, objpoints, imgpoints)
-
+    
+    saveCameraParameters(user, mtx, dist, rvecs, tvecs)
+    
     return mtx, dist, rvecs, tvecs
 
 
@@ -203,10 +219,17 @@ def drawlines(img1,img2,lines,pts1,pts2):
         img2 = cv.circle(img2,tuple(pt2),5,color,7)
     return img1,img2
 
+def compute3DPoints(pm1,P,pts1,pts2):
+    ptsh3d = cv.triangulatePoints(pm1,P,pts1,pts2)
+    
+    pts_sps = copy.deepcopy(ptsh3d[:,:3])
+    for i, pt in enumerate(ptsh3d):
+        pt = (pt / pt[3])[:3]
+        pts_sps[i, :] = pt[:3]
 
+    return pts_sps
 
-
-def computeEpilines(img1, img2):
+def computeEpilines(img1, img2, camera_matrix):
     kp1, des1 = siftDetector(img1)
     kp2, des2 = siftDetector(img2)
     
@@ -233,10 +256,23 @@ def computeEpilines(img1, img2):
     pts2 = np.int32(pts2)
     F, mask = cv.findFundamentalMat(pts1,pts2,cv.FM_LMEDS)
     
+        
     # We select only inlier points
     pts1 = pts1[mask.ravel()==1]
     pts2 = pts2[mask.ravel()==1]
     
+    E, mask = cv.findEssentialMat(pts1,pts2,camera_matrix)
+    
+    pts, R, t, mask = cv.recoverPose(E,pts1,pts2,camera_matrix)
+    
+    Projection_matrix = np.hstack((R, t))
+    
+    pm1 = np.eye(3, 4)
+    
+    points_3D = compute3DPoints(pm1,Projection_matrix,pts1,pts2)
+    
+    #print(points_3D)
+        
     # Find epilines corresponding to points in right image (second image) and
     # drawing its lines on left image
     lines1 = cv.computeCorrespondEpilines(pts2.reshape(-1,1,2), 2,F)
@@ -251,14 +287,10 @@ def computeEpilines(img1, img2):
     
     displayMultiple([img3,img5],0,4)
    
+    return F,E
     
     
-def buildDisparityMap(imgL,imgR):
-    imgL = cv.cvtColor(imgL,cv.COLOR_BGR2GRAY)
-    imgR = cv.cvtColor(imgR,cv.COLOR_BGR2GRAY)
-    stereo = cv.StereoBM_create(numDisparities=16, blockSize=15)
-    disparity = stereo.compute(imgL,imgR)
-    display(disparity,0,4,title='Disparity Map')
+
     
     
     
@@ -269,22 +301,32 @@ def main(user, CHESSBOARD):
 
     #nb_images = getFramesWithCorners(user, CHESSBOARD)
     
-    #nb_images = 14
+    nb_images = 14
     
     #images = loadSequence(user + 'Images/Calibration/calib_', '.jpg',0,nb_images)
     
-    #mtx, dist, rvecs, tvecs = computeCameraParameters(images) # 0.1120613588987386
+    #mtx, dist, rvecs, tvecs = computeCameraParameters(user,images) # 0.1120613588987386
     
-    #saveCameraParameters(user, mtx, dist, rvecs, tvecs)
+    #poseEstimation(user, nb_images, images[0], images[1])
+        
     
-    #mtx, dist, rvecs, tvecs = loadCameraParameters(user + 'Text/', nb_images)
+    mtx, dist, rvecs, tvecs = loadCameraParameters(user, nb_images)
     
     imgL = cv.imread(user + "Images/Blue/L.jpg",cv.IMREAD_UNCHANGED)
     imgR = cv.imread(user + "Images/Blue/R.jpg",cv.IMREAD_UNCHANGED)
     
-    computeEpilines(imgL, imgR)
     
-    #buildDisparityMap(imgL, imgR)
+    
+    TimgL = undistort(imgL, mtx, dist)
+    TimgR = undistort(imgR, mtx, dist)
+        
+    
+    F,E = computeEpilines(TimgL, TimgR,mtx)
+    #F,E = computeEpilines(imgL,imgR,mtx)
+    
+    #print(E == Eprime)
+    
+   
     
 
 user = "../Thomas/"
