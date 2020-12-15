@@ -204,6 +204,8 @@ def computeCameraParameters(user, images):
 
 
 def drawlines(img1,img2,lines,pts1,pts2):
+    pts1 = np.int32(pts1)
+    pts2 = np.int32(pts2)
     ''' img1 - image on which we draw the epilines for the points in img2
         lines - corresponding epilines '''
     r,c = img1.shape[:2]
@@ -223,12 +225,12 @@ def drawlines(img1,img2,lines,pts1,pts2):
 def compute3DPoints(P1,P2,pts1,pts2):
     #print('1: ', pts1[0])
     #print('2: ', pts2[0])
-    p1_3D = np.ones((3, pts1.shape[0]))
-    p2_3D = np.ones((3, pts2.shape[0]))
+    p1_3D = np.ones((2, pts1.shape[0]))
+    p2_3D = np.ones((2, pts2.shape[0]))
     p1_3D[0], p1_3D[1] = pts1[:, 0].copy(), pts1[:, 1].copy()
     p2_3D[0], p2_3D[1] = pts2[:, 0].copy(), pts2[:, 1].copy()
     
-    pts_obtained = cv.triangulatePoints(P1[:3],P2[:3], p1_3D[:2],p1_3D[:2] )
+    pts_obtained = cv.triangulatePoints(P1[:3],P2[:3], p1_3D,p1_3D )
     
     good_pts_mask = np.where(pts_obtained[3]!= 0)[0]
     point_4d = pts_obtained / pts_obtained[3] 
@@ -250,7 +252,7 @@ def computeEpilines(img1, img2, camera_matrix):
     # FLANN parameters
     FLANN_INDEX_KDTREE = 0
     index_params = dict(algorithm = FLANN_INDEX_KDTREE, trees = 5)
-    search_params = dict(checks=50)
+    search_params = dict(checks=500)
     
     flann = cv.FlannBasedMatcher(index_params,search_params)
     matches = flann.knnMatch(des1,des2,k=2)
@@ -266,8 +268,9 @@ def computeEpilines(img1, img2, camera_matrix):
             pts2.append(kp2[m.trainIdx].pt)
             pts1.append(kp1[m.queryIdx].pt)
     
-    pts1 = np.int32(pts1)
-    pts2 = np.int32(pts2)
+    pts1 = np.float32(pts1)
+    pts2 = np.float32(pts2)
+    
     F, mask = cv.findFundamentalMat(pts1,pts2,cv.FM_LMEDS)
     
         
@@ -276,17 +279,17 @@ def computeEpilines(img1, img2, camera_matrix):
     pts2 = pts2[mask.ravel()==1]
     
     E, mask = cv.findEssentialMat(pts1,pts2,camera_matrix)
-    Eprime, mask = cv.findEssentialMat(pts2,pts1,camera_matrix)
+    #Eprime, mask = cv.findEssentialMat(pts2,pts1,camera_matrix)
     
     #print("E:\n",E)
     #print("Eprime:\n",Eprime)
     #print(E == Eprime)
     
     pts3, R, t, mask = cv.recoverPose(E,pts1,pts2,camera_matrix)
-    pts4, R2, t2, mask = cv.recoverPose(Eprime,pts2,pts1,camera_matrix)    
+    #pts4, R2, t2, mask = cv.recoverPose(Eprime,pts2,pts1,camera_matrix)    
     
     Projection_matrix = np.hstack((R, t))
-    Projection_matrix2 = np.hstack((R2, t2))
+    #Projection_matrix2 = np.hstack((R2, t2))
     
     #print('pts3\n',pts3)
    # print('pts4\n',pts4)
@@ -294,10 +297,11 @@ def computeEpilines(img1, img2, camera_matrix):
     #print('Projection_matrix\n',Projection_matrix)
     #print('Projection_matrix2\n',Projection_matrix2)
     
-    #pm1 = np.eye(3, 4)
+    pm1 = np.eye(3, 4)
     
     #points3Dworld, frame1C,frame2C = compute3DPoints(Projection_matrix,Projection_matrix2,pts1,pts2)
-    points3Dworld, goodPointsMask = compute3DPoints(Projection_matrix,Projection_matrix2,pts1,pts2)
+    #points3Dworld, goodPointsMask = compute3DPoints(pm1,Projection_matrix,pts1,pts2)
+    points3Dworld, goodPointsMask = compute3DPoints(pm1,camera_matrix @ Projection_matrix,pts1,pts2)
     
     print(points3Dworld)
     
@@ -349,7 +353,7 @@ def main(user, CHESSBOARD):
     TimgR = undistort(imgR, mtx, dist)
         
     
-    _3Dpoints = computeEpilines(TimgL, TimgR,mtx)
+    _3Dpoints = computeEpilines(imgL, imgR,mtx)
     
    
     
