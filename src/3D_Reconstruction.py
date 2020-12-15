@@ -3,6 +3,7 @@ import cv2 as cv
 import numpy as np
 import imutils
 import matplotlib.pylab as plt
+from mpl_toolkits import mplot3d
 import copy
 
 
@@ -219,15 +220,28 @@ def drawlines(img1,img2,lines,pts1,pts2):
         img2 = cv.circle(img2,tuple(pt2),5,color,7)
     return img1,img2
 
-def compute3DPoints(pm1,P,pts1,pts2):
-    ptsh3d = cv.triangulatePoints(pm1,P,pts1,pts2)
+def compute3DPoints(P1,P2,pts1,pts2):
+    #print('1: ', pts1[0])
+    #print('2: ', pts2[0])
+    p1_3D = np.ones((3, pts1.shape[0]))
+    p2_3D = np.ones((3, pts2.shape[0]))
+    p1_3D[0], p1_3D[1] = pts1[:, 0].copy(), pts1[:, 1].copy()
+    p2_3D[0], p2_3D[1] = pts2[:, 0].copy(), pts2[:, 1].copy()
     
-    pts_sps = copy.deepcopy(ptsh3d[:,:3])
-    for i, pt in enumerate(ptsh3d):
-        pt = (pt / pt[3])[:3]
-        pts_sps[i, :] = pt[:3]
+    pts_obtained = cv.triangulatePoints(P1[:3],P2[:3], p1_3D[:2],p1_3D[:2] )
+    
+    good_pts_mask = np.where(pts_obtained[3]!= 0)[0]
+    point_4d = pts_obtained / pts_obtained[3] 
+    points_3d = point_4d[:3, :].T
+    
+    return points_3d, good_pts_mask 
+    """
+    pts3d /= pts3d[3]
+    X1 = P1[:3] @ pts3d
+    X2 = P2[:3] @ pts3d
+    return pts3d[:3], X1, X2 
+    """
 
-    return pts_sps
 
 def computeEpilines(img1, img2, camera_matrix):
     kp1, des1 = siftDetector(img1)
@@ -262,16 +276,34 @@ def computeEpilines(img1, img2, camera_matrix):
     pts2 = pts2[mask.ravel()==1]
     
     E, mask = cv.findEssentialMat(pts1,pts2,camera_matrix)
+    Eprime, mask = cv.findEssentialMat(pts2,pts1,camera_matrix)
     
-    pts, R, t, mask = cv.recoverPose(E,pts1,pts2,camera_matrix)
+    #print("E:\n",E)
+    #print("Eprime:\n",Eprime)
+    #print(E == Eprime)
+    
+    pts3, R, t, mask = cv.recoverPose(E,pts1,pts2,camera_matrix)
+    pts4, R2, t2, mask = cv.recoverPose(Eprime,pts2,pts1,camera_matrix)    
     
     Projection_matrix = np.hstack((R, t))
+    Projection_matrix2 = np.hstack((R2, t2))
     
-    pm1 = np.eye(3, 4)
+    #print('pts3\n',pts3)
+   # print('pts4\n',pts4)
+    #print(Projection_matrix == Projection_matrix2)
+    #print('Projection_matrix\n',Projection_matrix)
+    #print('Projection_matrix2\n',Projection_matrix2)
     
-    points_3D = compute3DPoints(pm1,Projection_matrix,pts1,pts2)
+    #pm1 = np.eye(3, 4)
     
-    #print(points_3D)
+    #points3Dworld, frame1C,frame2C = compute3DPoints(Projection_matrix,Projection_matrix2,pts1,pts2)
+    points3Dworld, goodPointsMask = compute3DPoints(Projection_matrix,Projection_matrix2,pts1,pts2)
+    
+    print(points3Dworld)
+    
+    ax = plt.axes(projection='3d')
+    ax.scatter(points3Dworld[:,0], points3Dworld[:,1], points3Dworld[:,2], s=1)
+    plt.show()
         
     # Find epilines corresponding to points in right image (second image) and
     # drawing its lines on left image
@@ -286,10 +318,8 @@ def computeEpilines(img1, img2, camera_matrix):
     img3,img4 = drawlines(img2,img1,lines2,pts2,pts1)
     
     displayMultiple([img3,img5],0,4)
-   
-    return F,E
     
-    
+    return points3Dworld
 
     
     
@@ -315,16 +345,11 @@ def main(user, CHESSBOARD):
     imgL = cv.imread(user + "Images/Blue/L.jpg",cv.IMREAD_UNCHANGED)
     imgR = cv.imread(user + "Images/Blue/R.jpg",cv.IMREAD_UNCHANGED)
     
-    
-    
     TimgL = undistort(imgL, mtx, dist)
     TimgR = undistort(imgR, mtx, dist)
         
     
-    F,E = computeEpilines(TimgL, TimgR,mtx)
-    #F,E = computeEpilines(imgL,imgR,mtx)
-    
-    #print(E == Eprime)
+    _3Dpoints = computeEpilines(TimgL, TimgR,mtx)
     
    
     
